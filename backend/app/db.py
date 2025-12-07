@@ -9,7 +9,7 @@ from fastapi import Depends
 from typing import List
 
 
-DATABASE_URL = "mysql+aiomysql://test_user:test_pass@localhost:3306/testdb"
+DATABASE_URL = "mysql+aiomysql://test_user:test_pass@db/testdb"
 
 class Base(DeclarativeBase):
     pass
