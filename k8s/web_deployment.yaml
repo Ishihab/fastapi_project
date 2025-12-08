@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-social-web
+  labels:
+    name: simple-social-web
+    app: simple-social
+spec:
+  replicas: 2
+  selector:
+      matchLabels:
+          name: simple-social-web
+          app: simple-social
+  template:
+    metadata:
+      name : simple-social-web
+      labels:
+        name: simple-social-web
+        app: simple-social
+    spec:
+      containers:
+        - name: simple-social-web
+          image: docker.io/0142365870/simple-social-web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8501
+          env:
+            - name: API_URL
+              value: "simple-social-api:8000"
+

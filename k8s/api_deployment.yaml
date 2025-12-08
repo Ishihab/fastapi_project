@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-social-api
+  labels:
+    name: simple-social-api
+    app: simple-social
+
+
+spec:
+  replicas: 2
+  selector:
+      matchLabels:
+          app: simple-social
+  template:
+    metadata:
+      name : simple-social-api
+      labels:
+        name: simple-social-api
+        app: simple-social
+    spec:
+      containers:
+        - name: simple-social-api
+          image: docker.io/0142365870/simple-social-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: ${DATABASE_URL}
+            - name: DATABASE_PASS
+              value: ${DATABASE_PASS}
+            - name: DATABASE_USER
+              value: ${DATABASE_USER}
+            - name: DATABASE_NAME
+              value: ${DATABASE_NAME}
+            
+    

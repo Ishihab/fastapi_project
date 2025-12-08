@@ -7,9 +7,14 @@ from datetime import datetime
 from fastapi_users.db import SQLAlchemyUserDatabase, SQLAlchemyBaseUserTableUUID
 from fastapi import Depends
 from typing import List
+import os
 
 
-DATABASE_URL = "mysql+aiomysql://test_user:test_pass@db/testdb"
+db_url = os.getenv("DB_URL")
+db_user = os.getenv("DB_USER")
+db_pass = os.getenv("DB_PASS")
+db_name = os.getenv("DB_NAME")
+DATABASE_URL = f"mysql+aiomysql://{db_user}:{db_pass}@{db_url}/{db_name}"
 
 class Base(DeclarativeBase):
     pass
@@ -42,3 +47,4 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
     yield SQLAlchemyUserDatabase(session, User)
+
