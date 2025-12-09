@@ -6,7 +6,6 @@ variable "deployment_name" {
 variable "namespace" {
   description = "The Kubernetes namespace for the deployment"
   type        = string
-  default     = "default"
 }
 
 variable "replicas" {
@@ -52,7 +51,7 @@ variable "secret_name" {
 variable "service_name" {
   description = "The name of the Kubernetes service"
   type        = string
-  default = var.deployment_name
+  
 }
 
 variable "service_port" {
@@ -77,3 +76,4 @@ variable "service_type" {
   type        = string
   default     = "ClusterIP"
 }
+
