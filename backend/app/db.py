@@ -10,11 +10,9 @@ from typing import List
 import os
 
 
-db_url = os.getenv("DB_URL")
-db_user = os.getenv("DB_USER")
-db_pass = os.getenv("DB_PASS")
-db_name = os.getenv("DB_NAME")
-DATABASE_URL = f"mysql+aiomysql://{db_user}:{db_pass}@{db_url}/{db_name}"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 
 class Base(DeclarativeBase):
     pass

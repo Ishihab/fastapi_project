@@ -1,116 +1,160 @@
+data "aws_availability_zones" "available" {
+    state = "available"
+}
+
+locals {
+    azs = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1], data.aws_availability_zones.available.names[2]]
+    vpc_cidr = "10.17.0.0/16"
+    vpc_name = "simple-social-vpc"
+    db_username = "admin"
+    db_name     = "simplesocialdb"
+    db_allocated_storage = 8
+    db_instance_class    = "db.t3.micro"
+    db_engine            = "mysql"
+    db_engine_version    = "8.0"
+    db_identifier       = "simple-social-db"
+    cluster_name       = "simple-social-eks"
+
+
+}
+
 module "vpc" {
-    source = "./module/vpc"
+    source  = "terraform-aws-modules/vpc/aws"
+    version = "6.5.1"
+    name = local.vpc_name
+    cidr = local.vpc_cidr
+    azs = local.azs
+    create_database_nat_gateway_route = true
+    create_private_nat_gateway_route = true
+    database_subnet_group_name = "${local.vpc_name}-db-subnet-group"
+    database_subnet_names = ["${local.vpc_name}-db-subnet-1", "${local.vpc_name}-db-subnet-2", "${local.vpc_name}-db-subnet-3"]
+    private_subnets     = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k)]
+    public_subnets      = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 4)]
+    database_subnets    = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 8)]
 
-}
 
-module "eks" {
-    source = "./module/eks"
-
-    cluster_name = var.cluster_name
-    subnet_ids   = module.vpc.subnets_eks
-}
-
-module "rds" {
-    source = "./module/rds"
-
+    create_database_subnet_group = true
+    enable_nat_gateway = true
+    single_nat_gateway = false
+    one_nat_gateway_per_az = true
+    public_subnet_tags = {
+        "kubernetes.io/role/elb" = "1"
+    }
+    private_subnet_tags = {
+        "kubernetes.io/role/internal-elb" = 1
+    }
     
-    db_subnet_group_name = module.vpc.db_subnet_group_name
-    db_security_group_ids = [module.vpc.db_sg_id]
-    db_name = "simple_social_db"
+    
 
 }
 
-module "env_data_api" {
-    source = "./module/env_data"
-    config_map_name = "env_config_map_api"
-    namespace       = "simple_social"
-    labels = {
-        app = "simple-social-config"
-    }
-    config_map_data = {
-        DB_URL  = module.rds.db_instance_endpoint
-        DB_NAME = module.rds.db_name
-        DB_USER = module.rds.db_username
-    }
-
-    secret_name = "simple-social-secrets"
-    secret_data = {
-        DB_PASS = module.rds.db_password
-    }
-
-    secret_data_revision = module.rds.db_password_version
-
+module "mysql_rds_sg" {
+    source = "terraform-aws-modules/security-group/aws"
+    version = "4.14.0"
+    name = "mysql-rds-sg"
+    vpc_id = module.vpc.vpc_id
+    ingress_with_cidr_blocks = [
+        {
+            from_port   = 3306
+            to_port     = 3306
+            protocol    = "tcp"
+            cidr_blocks = module.vpc.vpc_cidr_block
+            description = "Allow MySQL access from within VPC"
+        }
+    ]
   
 }
 
-module "env_data_fronend" {
-    source = "./module/env_data"
-    config_map_name = "env_config_map_frontend"
-    namespace       = "simple_social"
-    labels = {
-        app = "simple-social-config"
-    }
-    config_map_data = {
-        API_URL = "${module.k8s_manifest_api.service_name}:${module.k8s_manifest_api.service_port}"
-    }
-
+resource "random_password" "db_password" {
+    length  = 16
+    special = true
+    override_special = "_%@"
+  
 }
 
-module "k8s_manifest_api" {
-    source = "./module/k8s_manifest"
-    namespace     = var.namespace
-    deployment_name = "simple-social-api-deployment"
-    labels = {
-        app = "simple-social-api"
+resource "aws_ssm_parameter" "db_password_parameter" {
+    name  = "/simple-social/db_password"
+    type  = "SecureString"
+    value = random_password.db_password.result
+    description = "The password for the RDS database"
+  
+}
+
+
+
+
+
+module "mysql_rds" {
+    source = "terraform-aws-modules/rds/aws"
+    version = "6.13.1"
+    identifier = local.db_identifier
+    engine = local.db_engine
+    engine_version = local.db_engine_version
+    family = "${local.db_engine}${local.db_engine_version}"
+    major_engine_version = local.db_engine_version
+    instance_class = local.db_instance_class
+    allocated_storage = local.db_allocated_storage
+    db_name = local.db_name
+    username = local.db_username
+    password = random_password.db_password.result
+    manage_master_user_password = false
+    vpc_security_group_ids = [module.mysql_rds_sg.security_group_id]
+    db_subnet_group_name = module.vpc.database_subnet_group_name
+    multi_az = false
+    publicly_accessible = false
+    skip_final_snapshot = true
+    deletion_protection = false
+    performance_insights_enabled = false
+    performance_insights_retention_period = 7
+    monitoring_interval = 60
+    create_monitoring_role = true
+    parameters = [
+    {
+        name  = "slow_query_log"
+        value = "1"
+    },
+
+    {
+        name  = "long_query_time"
+        value = "2"
+    },
+
+     {
+        name  = "log_output"
+        value = "FILE"
+    },
+
+     {
+        name = "time_zone"
+        value = "UTC"
+    }]
+
+    tags = {
+        Name = "simple-social-mysql-rds"
     }
-    container_image = "docker.io/0142365870/simple_social_api:latest"
-    container_name  = "simple-social-api"
-    container_port  = 8000
-    target_port = 8000
-    replicas        = 2
-    config_map_name = module.env_data_api.config_map_name
-    secret_name     = module.env_data_api.secret_name
-    service_name    = "simple-social-api"
-    service_port    = 8000
     
 }
 
-module "k8s_manifest_frontend" {
-    source = "./module/k8s_manifest"
-    namespace     = var.namespace
-    deployment_name = "simple-social-frontend-deployment"
-    labels = {
-        app = "simple-social-frontend"
+module "eks" {
+    source = "terraform-aws-modules/eks/aws"
+    version = "~> 21.0"
+    name = local.cluster_name
+    kubernetes_version = "1.34"
+    endpoint_private_access = true
+    endpoint_public_access = true
+    enable_cluster_creator_admin_permissions = true
+    vpc_id = module.vpc.vpc_id
+    subnet_ids = module.vpc.private_subnets
+    compute_config = {
+        enabled = true
+        node_pools = ["general-purpose"]
     }
-    container_image = "docker.io/0142365870/simple_social_frontend:latest"
-    container_name  = "simple-social-frontend"
-    container_port  = 80
-    target_port = 80
-    replicas        = 2
-    config_map_name = module.env_data_fronend.config_map_name
-    service_name    = "simple-social-frontend"
-    service_port    = 80
-    
+    tags = {
+        Name = "simple-social-eks-cluster"
+
+    }
+
+  
 }
-
-module "k8s_ingress" {
-    source = "./module/k8s_ingress"
-    namespace     = var.namespace
-    ingress_name  = "simple-social-ingress"
-    host_name     = null
-    path          = "/"
-    path_type     = "Prefix"
-    annotations   = {
-        "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
-        "alb.ingress.kubernetes.io/target-type" = "ip"
-    }
-    labels = {
-        app = "simple-social-ingress"
-    }
-    service_name  = module.k8s_manifest_frontend.service_name
-    service_port  = module.k8s_manifest_frontend.service_port
-
-}
-
 
 
