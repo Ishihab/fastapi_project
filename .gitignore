@@ -1,0 +1,12 @@
+.terraform/
+.terraform.lock.hcl
+# Local Terraform variables file
+terraform.tfvars
+# Override files
+override.tf
+override.tf.json
+*_override.tf   
+.terraformrc
+.terraform.d/
+.terragrunt-cache/
+.terragrunt-cache/
