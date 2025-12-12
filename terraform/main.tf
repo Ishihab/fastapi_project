@@ -153,7 +153,7 @@ module "eks" {
         Name = "simple-social-eks-cluster"
 
     }
-
+    depends_on = [ module.vpc, module.mysql_rds]
   
 }
 
