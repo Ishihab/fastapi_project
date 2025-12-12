@@ -12,6 +12,17 @@ module "alb_irsa" {
   }
 }
 
+resource "kubernetes_service_account_v1" "k8s_service_account" {
+  metadata {
+    name      = "aws-load-balancer-controller"
+    namespace = "kube-system"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.alb_irsa.iam_role_arn
+    }
+  }
+  depends_on = [ module.eks, module.vpc ]
+}
+
 resource "helm_release" "aws_load_balancer_controller" {
   name       = "aws-load-balancer-controller"
   namespace  = "kube-system"
@@ -26,7 +37,7 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   set {
     name  = "serviceAccount.create"
-    value = "true"
+    value = "false"
   }
 
   set {
@@ -48,6 +59,8 @@ resource "helm_release" "aws_load_balancer_controller" {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = module.alb_irsa.iam_role_arn
   }
+  
+ depends_on = [ module.eks, kubernetes_service_account_v1.k8s_service_account ]
 
 }
 
@@ -56,7 +69,10 @@ resource "helm_release" "aws_load_balancer_controller" {
 resource "kubernetes_namespace_v1" "simple-social" {
     metadata {
         name = "simple-social"
+        
     }
+    
+
 }
 
 resource "kubernetes_secret_v1" "db-credentials" {
@@ -65,9 +81,14 @@ resource "kubernetes_secret_v1" "db-credentials" {
         namespace = kubernetes_namespace_v1.simple-social.metadata[0].name
     }
     data = {
-        DATABASE_URL = "mysql+aiomysql://${local.db_username}:${random_password.db_password.result}@${module.mysql_rds.db_instance_address}/${local.db_name}"
+        DB_USER = local.db_username
+        DB_PASS = random_password.db_password.result
     }
     type = "Opaque"
+
+
+    depends_on = [ module.eks ]
+
 }
 
 resource "kubernetes_config_map_v1" "db-config" {
@@ -76,8 +97,12 @@ resource "kubernetes_config_map_v1" "db-config" {
         namespace = kubernetes_namespace_v1.simple-social.metadata[0].name
     }
     data = {
-        FRONTEND_URL = "http://simple-social-frontend.simple-social.svc.cluster.local"
+        DB_URL = module.mysql_rds.db_instance_address
+        DB_NAME = local.db_name
+        
     }
+    depends_on = [ module.eks ]
+  
 }
 
 resource "kubernetes_config_map_v1" "frontend" {
@@ -86,8 +111,9 @@ resource "kubernetes_config_map_v1" "frontend" {
         namespace = kubernetes_namespace_v1.simple-social.metadata[0].name
     }
     data = {
-        API_URL = "http://backend-service.simple-social.svc.cluster.local"
+        API_URL = "backend-service.simple-social.svc.cluster.local"
     }
+    depends_on = [ module.eks, module.vpc ]
 }
 
 resource "kubernetes_deployment_v1" "simple-social-api" {
@@ -125,37 +151,12 @@ resource "kubernetes_deployment_v1" "simple-social-api" {
                             name = kubernetes_secret_v1.db-credentials.metadata[0].name
                         }
                     }
-                    resources {
-                        requests = {
-                            cpu    = "250m"
-                            memory = "512Mi"
-                        }
-                        limits = {
-                            cpu    = "500m"
-                            memory = "1Gi"
-                        }
-                    }
-                    liveness_probe {
-                        http_get {
-                            path = "/health"
-                            port = 8000
-                        }
-                        initial_delay_seconds = 30
-                        period_seconds        = 10
-                    }
-                    readiness_probe {
-                        http_get {
-                            path = "/ready"
-                            port = 8000
-                        }
-                        initial_delay_seconds = 10
-                        period_seconds        = 5
-                    }
                 }
             }
         }
     }
-    depends_on = [ kubernetes_namespace_v1.simple-social ]
+    
+  depends_on = [ module.eks, module.vpc ]
 }
 
 resource "kubernetes_service_v1" "simple-social-api" {
@@ -173,6 +174,8 @@ resource "kubernetes_service_v1" "simple-social-api" {
         }
         type = "ClusterIP"
     }
+    
+  depends_on = [ module.eks ]
 }
 
 resource "kubernetes_deployment_v1" "simple-social-frontend" {
@@ -205,21 +208,12 @@ resource "kubernetes_deployment_v1" "simple-social-frontend" {
                             name = kubernetes_config_map_v1.frontend.metadata[0].name
                         }
                     }
-                    resources {
-                        requests = {
-                            cpu    = "250m"
-                            memory = "512Mi"
-                        }
-                        limits = {
-                            cpu    = "500m"
-                            memory = "1Gi"
-                        }
-                    }
                 }
             }
         }
     }
-    depends_on = [ kubernetes_namespace_v1.simple-social ]
+    
+  depends_on = [ module.eks, module.vpc ]
 }
 
 resource "kubernetes_service_v1" "simple-social-frontend" {
@@ -237,7 +231,7 @@ resource "kubernetes_service_v1" "simple-social-frontend" {
         }
         type = "ClusterIP"
     }
-    depends_on = [ module.eks, kubernetes_namespace_v1.simple-social, kubernetes_deployment_v1.simple-social-frontend ]
+    depends_on = [ module.eks, module.vpc ]
   
 }
 
@@ -251,6 +245,7 @@ resource "kubernetes_ingress_v1" "simple-social-ingress" {
       "kubernetes.io/ingress.class"           = "alb"
       "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
       "alb.ingress.kubernetes.io/target-type" = "ip"
+      "alb.ingress.kubernetes.io/manage-backend-security-group-rules" = "false"
     }
   }
 
@@ -274,8 +269,6 @@ resource "kubernetes_ingress_v1" "simple-social-ingress" {
   }
 
   depends_on = [
-    module.eks,
-    kubernetes_service_v1.simple-social-frontend,
-    helm_release.aws_load_balancer_controller
+    module.eks, module.vpc
   ]
 }

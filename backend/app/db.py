@@ -10,9 +10,11 @@ from typing import List
 import os
 
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is not set")
+db_url = os.getenv("DB_URL")
+db_user = os.getenv("DB_USER")
+db_pass = os.getenv("DB_PASS")
+db_name = os.getenv("DB_NAME")
+DATABASE_URL = f"mysql+aiomysql://{db_user}:{db_pass}@{db_url}/{db_name}"
 
 class Base(DeclarativeBase):
     pass
@@ -27,6 +29,7 @@ class Post(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"), nullable=False)
     caption: Mapped[str] = mapped_column(Text, nullable=True)
     url: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    file_id: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
     file_type: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
     file_name: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
