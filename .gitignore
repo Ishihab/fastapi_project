@@ -10,3 +10,4 @@ override.tf.json
 .terraform.d/
 .terragrunt-cache/
 .terragrunt-cache/
+RESUME_PROJECTS.md
