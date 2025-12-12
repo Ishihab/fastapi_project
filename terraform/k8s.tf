@@ -10,6 +10,7 @@ module "alb_irsa" {
       namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
     }
   }
+  depends_on = [ module.eks ]
 }
 
 resource "kubernetes_service_account_v1" "k8s_service_account" {
@@ -20,7 +21,7 @@ resource "kubernetes_service_account_v1" "k8s_service_account" {
       "eks.amazonaws.com/role-arn" = module.alb_irsa.iam_role_arn
     }
   }
-  depends_on = [ module.eks, module.vpc ]
+  depends_on = [ module.alb_irsa ]
 }
 
 resource "helm_release" "aws_load_balancer_controller" {
@@ -60,7 +61,7 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = module.alb_irsa.iam_role_arn
   }
   
- depends_on = [ module.eks, kubernetes_service_account_v1.k8s_service_account ]
+ depends_on = [ kubernetes_service_account_v1.k8s_service_account ]
 
 }
 
@@ -272,6 +273,6 @@ resource "kubernetes_ingress_v1" "simple-social-ingress" {
   }
 
   depends_on = [
-    module.eks, module.vpc, helm_release.aws_load_balancer_controller, kubernetes_service_v1.simple-social-frontend
+    helm_release.aws_load_balancer_controller, kubernetes_service_v1.simple-social-frontend
   ]
 }
