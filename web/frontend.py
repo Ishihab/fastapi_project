@@ -4,7 +4,7 @@ import base64
 import urllib.parse
 import os
 
-api_url = f"http://{os.getenv("API_URL"), "http://backend:8000"}"
+api_url = f"http://{os.getenv("API_URL"), "http://backend-service"}"
 print(f"API URL: {api_url}")
 st.set_page_config(page_title="Simple Social", layout="wide")
 

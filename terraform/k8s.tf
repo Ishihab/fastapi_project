@@ -71,7 +71,7 @@ resource "kubernetes_namespace_v1" "simple-social" {
         name = "simple-social"
         
     }
-    
+    depends_on = [ module.eks ]
 
 }
 
@@ -87,7 +87,7 @@ resource "kubernetes_secret_v1" "db-credentials" {
     type = "Opaque"
 
 
-    depends_on = [ module.eks ]
+    depends_on = [ module.eks, module.vpc, random_password.db_password ]
 
 }
 
@@ -101,7 +101,7 @@ resource "kubernetes_config_map_v1" "db-config" {
         DB_NAME = local.db_name
         
     }
-    depends_on = [ module.eks ]
+    depends_on = [ module.eks, module.vpc ]
   
 }
 
@@ -138,6 +138,7 @@ resource "kubernetes_deployment_v1" "simple-social-api" {
                 container {
                     name  = "simple-social-api"
                     image = "0142365870/simple_social_api:latest"
+                    image_pull_policy = "Always"
                     port {
                         container_port = 8000
                     }
@@ -175,7 +176,7 @@ resource "kubernetes_service_v1" "simple-social-api" {
         type = "ClusterIP"
     }
     
-  depends_on = [ module.eks ]
+  depends_on = [ module.eks, module.vpc]
 }
 
 resource "kubernetes_deployment_v1" "simple-social-frontend" {
@@ -200,6 +201,7 @@ resource "kubernetes_deployment_v1" "simple-social-frontend" {
                 container {
                     name  = "simple-social-frontend"
                     image = "0142365870/simple_social_frontend:latest"
+                    image_pull_policy = "Always"
                     port {
                         container_port = 8501
                     }
@@ -246,6 +248,7 @@ resource "kubernetes_ingress_v1" "simple-social-ingress" {
       "alb.ingress.kubernetes.io/scheme"      = "internet-facing"
       "alb.ingress.kubernetes.io/target-type" = "ip"
       "alb.ingress.kubernetes.io/manage-backend-security-group-rules" = "false"
+      "alb.ingress.kubernetes.io/delete-automation-enabled" = "true"
     }
   }
 
@@ -269,6 +272,6 @@ resource "kubernetes_ingress_v1" "simple-social-ingress" {
   }
 
   depends_on = [
-    module.eks, module.vpc
+    module.eks, module.vpc, helm_release.aws_load_balancer_controller, kubernetes_service_v1.simple-social-frontend
   ]
 }
