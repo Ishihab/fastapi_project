@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: simple-social-api
   labels:
-    name: simple-social-api-service
+    name: simple-social-api
     app: simple-social
 spec:
   selector:
@@ -12,7 +12,7 @@ spec:
 
   ports:
     - protocol: TCP
-      port: 8000
+      port: 80
       targetPort: 8000
   type: ClusterIP
 

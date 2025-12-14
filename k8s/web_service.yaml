@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: simple-social-api-service
+  name: simple-social-web
   labels:
-    name: simple-social-api-service
+    name: simple-social-web
     app: simple-social
 spec:
   selector:
@@ -13,6 +13,8 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8501
+  type: ClusterIP
+  
  
 
 

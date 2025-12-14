@@ -26,5 +26,5 @@ spec:
             - containerPort: 8501
           env:
             - name: API_URL
-              value: "simple-social-api:8000"
+              value: "simple-social-api"
 
